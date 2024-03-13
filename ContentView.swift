@@ -270,17 +270,25 @@ struct CalendarView: View {
                         .background(selectedDate == calendarDate.date ? Color.yellow : Color.clear)
                         .cornerRadius(5)
                     }else {
-                            Text("").frame(width: 40, height: 40, alignment: .center)
-                        }
+                        Text("").frame(width: 40, height: 40, alignment: .center)
                     }
                 }
             }
             .padding()
         }
-            // フォーマットされた日付
-            var formattedDate: String {
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "yyyy/MM"
-                return dateFormatter.string(from: viewModel.selectedMonth)
+        .sheet(isPresented: $isSheetPresented) {// シートを表示する
+            VStack {
+                if let selectedDate = viewModel.calendarDates.first(where: { $0.id == selectedDateUUID?.id })?.date {
+                    //日付が見つからない場合の処理
+                    Text("日付が見つかりません")
+                }
             }
         }
+        // フォーマットされた日付
+        var formattedDate: String {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy/MM"
+            return dateFormatter.string(from: viewModel.selectedMonth)
+        }
+    }
+}
