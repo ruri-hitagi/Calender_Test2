@@ -261,7 +261,9 @@ struct CalendarView: View {
                     if let date = calendarDate.date, let day = Calendar.current.day(for: date){
                         let isHoliday = viewModel.isHoliday(date: date)//祝日かどうかを確認
                         Button(action: {
+                            guard let date = calendarDate.date else { return }
                             selectedDate = date //選択された日付を更新
+                            isSheetPresented = true // シートを表示
                         }){
                             Text("\(day)").frame(width: 40, height: 40, alignment: .center)
                         }
@@ -278,9 +280,17 @@ struct CalendarView: View {
         }
         .sheet(isPresented: $isSheetPresented) {// シートを表示する
             VStack {
-                if let selectedDate = viewModel.calendarDates.first(where: { $0.id == selectedDateUUID?.id })?.date {
+                if let selectedDate = selectedDate {
+                    Text("選択された日付: \(selectedDate)")
+                } else {
                     //日付が見つからない場合の処理
                     Text("日付が見つかりません")
+                }
+                
+                Button(action: {
+                    isSheetPresented = false // シートを閉じる
+                }) {
+                    Text("閉じる")
                 }
             }
         }
