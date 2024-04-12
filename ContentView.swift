@@ -150,7 +150,7 @@ class CalendarViewModel: ObservableObject {
         } else if month == 11 && day == 3 {
             return true // 文化の日
         } else if month == 11 && day == 23 {
-            return true // 勤労感謝の日
+            return true// 勤労感謝の日
         }
         
         // ハッピーマンデー法に基づく祝日の計算
@@ -218,17 +218,116 @@ class CalendarViewModel: ObservableObject {
         //他の祝日の判定処理
         return false
     }
+    
+    
+    //祝日かどうかを判定する関数
+    func isHolidayName(date: Date) -> String? {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month, .day, .weekday], from: date)
+        guard let year = components.year, let month = components.month, let day = components.day,
+              let weekday = components.weekday else{
+            return nil
+        }
+        
+        //春分の日と秋分の日の計算
+        func calculateSpringAutumnEquinox(year: Int, isSpring: Bool) -> Int? {
+            var components = DateComponents()
+            components.year = year
+            components.month = 3 //春分の日は3月または9月にあるため、適切な月を設定する必要があります
+            if isSpring {
+                components.day = 20 // 春分の日は3月20日以降
+            } else {
+                components.day = 23 // 秋分の日は9月23日以降
+            }
+            
+            guard let springDate = calendar.date(from: components) else {
+                return nil
+            }
+            
+            return calendar.component(.day, from: springDate)
+        }
+        
+        //国民の休日の判定
+        if weekday == 2 && day == 12 && month == 2 {
+            return "振替休日" // 2月11日が祝日の場合、2月12日も国民の休日となる
+        } else if weekday == 2 && day == 11 && month == 5 {
+            return "振替休日" // 5月3日と5月4日の間に祝日がある場合、その間も国民の休日となる
+        } else if weekday == 2 && day == 4 && month == 5 {
+            let dateComponents = DateComponents(year: year, month: month, day: 3)
+            if let previousDay = calendar.date(from: dateComponents), calendar.isDate(previousDay, inSameDayAs: date) {
+                return "振替休日"
+            }
+        }else if month == 1 && day == 1 {
+            return "元日" // 元日
+        }else if month == 2 && day == 23{
+            return "天皇誕生日" //天皇誕生日
+        }else if month == 4 && day == 29{
+            return "昭和の日" //昭和の日
+        }else if month == 5 && day == 3{
+            return "憲法記念日" //憲法記念日
+        }else if month == 5 && day == 4{
+            return "みどりの日" //みどりの日
+        }else if month == 5 && day == 5{
+            return "こどもの日" //こどもの日
+        } else if month == 8 && day == 11 {
+            return "山の日" // 山の日
+        } else if month == 11 && day == 3 {
+            return "文化の日" // 文化の日
+        } else if month == 11 && day == 23 {
+            return "勤労感謝の日"// 勤労感謝の日
+        }
+        
+        // ハッピーマンデー法に基づく祝日の計算
+        else if weekday == 2{
+            // 月曜日の場合
+            switch month {
+            case 1: // 成人の日（1月の第2月曜日）
+                if day > 7 && day <= 14 {
+                    return "成人の日"
+                }
+            case 7: // 海の日（7月の第3月曜日）
+                if day > 14 && day <= 21 {
+                    return "海の日"
+                }
+            case 9: // 敬老の日（9月の第3月曜日）
+                if day > 14 && day <= 21 {
+                    return "敬老の日"
+                }
+            case 10: // 体育の日（10月の第2月曜日）
+                if day > 7 && day <= 14 {
+                    return "体育の日"
+                }
+            default:
+                return nil
+            }
+        }
+        // 春分の日と秋分の日の計算
+        else if month == 3 {
+            // 春分の日
+            if day == calculateSpringAutumnEquinox(year: year, isSpring: true) {
+                return "春分の日"
+            }
+        } else if month == 9 {
+            // 秋分の日
+            if day == calculateSpringAutumnEquinox(year: year, isSpring: false) {
+                return "秋分の日"
+            }
+        }
+        
+        // ハッピーマンデー法とその他の祝日の計算で該当しない場合、nilを返す
+        return nil
+    }
 }
 
 //親ビュー
 struct ContentView: View {
-    @ObservedObject var viewModel: CalendarViewModel = CalendarViewModel(selectedDateUUID: UUID())
+    @ObservedObject var viewModel = CalendarViewModel(selectedDateUUID: UUID())
     @State private var selectedDateUUID: IdentifiableUUID? = nil
-    
+        
     var body: some View{
         CalendarView(viewModel: viewModel, selectedDateUUID: $selectedDateUUID)
             .onAppear{
-                selectedDateUUID = IdentifiableUUID(id: UUID())
+                    selectedDateUUID = IdentifiableUUID(id: UUID())
             }
     }
 }
@@ -242,6 +341,7 @@ struct CalendarView: View {
     let columns: [GridItem] = Array(repeating: .init(.fixed(40)), count: 7)
     @State private var selectedDate:Date?
     
+
     var body: some View {
         VStack{
             // 西暦と月の表示
@@ -262,12 +362,13 @@ struct CalendarView: View {
                         let isHoliday = viewModel.isHoliday(date: date)//祝日かどうかを確認
                         Button(action: {
                             guard let date = calendarDate.date else { return }
+                            selectedDateUUID = IdentifiableUUID(id: calendarDate.id) // 選択された日付のUUIDを更新
                             selectedDate = date //選択された日付を更新
                             isSheetPresented = true // シートを表示
                         }){
                             Text("\(day)").frame(width: 40, height: 40, alignment: .center)
                         }
-                        .foregroundColor(isHoliday ? .red : calendarDate.isToday ? .blue : .black) // 今日の日付は青く、祝日は赤く表示
+                    .foregroundColor(isHoliday ? .red : calendarDate.isToday ? .blue : .black) // 今日の日付は青く、祝日は赤く表示
                         .padding(5)
                         .background(selectedDate == calendarDate.date ? Color.yellow : Color.clear)
                         .cornerRadius(5)
@@ -280,8 +381,13 @@ struct CalendarView: View {
         }
         .sheet(isPresented: $isSheetPresented) {// シートを表示する
             VStack {
-                if let selectedDate = selectedDate {
-                    Text("選択された日付: \(selectedDate)")
+                if let selectedDate = viewModel.calendarDates.first(where: { $0.id == selectedDateUUID?.id })?.date {
+                   if let holidayName = viewModel.isHolidayName(date: selectedDate) {
+                       Text("選択された日付: \(holidayName)")
+                   } else {
+                      // 祝日名が見つからない場合の処理
+                      Text("祝日名が見つかりません")
+                    }
                 } else {
                     //日付が見つからない場合の処理
                     Text("日付が見つかりません")
@@ -302,3 +408,4 @@ struct CalendarView: View {
         }
     }
 }
+
