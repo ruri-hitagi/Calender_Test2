@@ -9,32 +9,22 @@ import SwiftUI
 
 //Extensions 拡張機能
 extension Calendar {
+    // 月の初日を取得
     func startOfMonth(for date: Date) -> Date? {
-        let components = self.dateComponents([.year, .month], from: date)
+        let components = dateComponents([.year, .month], from: date)
         return self.date(from: components)
     }
     
+    // 月に含まれる日数を取得
     func daysInMonth(for date: Date) -> Int? {
         return self.range(of: .day, in: .month, for: date)?.count
     }
-    
-    func weeksInMonth(for date: Date) -> Int? {
-        return self.range(of: .weekOfMonth, in: .month, for: date)?.count
-    }
-    
-    func weekday(for date: Date) -> Int? {
-        return self.component(.weekday, from: date)
-    }
-    
-    func day(for date: Date) -> Int? {
-        return self.component(.day, from: date)
-    }
 }
 
-//Models　モデル
+// Data Models (データモデル)
 // 日付を表す構造体
 struct CalendarDate: Identifiable {
-    var id = UUID() // UUID型のプロパティをIdentifiableに準拠させる
+    let id: UUID = UUID() // UUID型のプロパティをIdentifiableに準拠させる
     var date: Date?
     var isToday: Bool // 今日の日付かどうかを表すプロパティ
     var holidayName: String? // 祝日の名前を格納するプロパティ
@@ -50,70 +40,47 @@ struct IdentifiableUUID: Identifiable {
     }
 }
 
-//　カレンダービューモデル
+//　CalendarViewModel (カレンダービューモデル)
 class CalendarViewModel: ObservableObject {
-    @Published var calendarDates = [CalendarDate]()
-    @Published var weekdays = [String]()
-    @Published var selectedMonth = Date()
+    @Published var calendarDates: [CalendarDate] = []
+    @Published var selectedMonth: Date = Date()
     
-    init(selectedDateUUID: UUID){
-        // ここでselectedDateUUIDを使う必要があるか確認する
-        setupCalendar()
+    init() {
+        setupCalendar(for: selectedMonth)
     }
     
-    //カレンダーのセットアップ
-    func setupCalendar() {
-        print("setupCalendar")
-        
-        // 曜日の設定
-        let dateFormatter = DateFormatter()
-        weekdays = dateFormatter.shortWeekdaySymbols
-        
-        //今月の日付を取得
-        let now = Date()
-        guard let startOfMonth = Calendar.current.startOfMonth(for: now),
-              let daysInMonth = Calendar.current.daysInMonth(for: now),
-              let weeksInMonth = Calendar.current.weeksInMonth(for: now) else {
+    func setupCalendar(for month: Date) {
+        let calendar = Calendar.current
+        guard let startOfMonth = calendar.startOfMonth(for: month),
+              let daysInMonth = calendar.daysInMonth(for: month) else {
             return
         }
-        
-        var days = [CalendarDate] ()
-        
-        //カレンダーの日付を設定
+
+        var days = [CalendarDate]()
         for day in 0..<daysInMonth {
-            if let date = Calendar.current.date(byAdding: .day, value: day, to: startOfMonth){
-                let isToday = Calendar.current.isDateInToday(date) //今日の日付かどうか確認
+            if let date = calendar.date(byAdding: .day, value: day, to: startOfMonth) {
+                let isToday = calendar.isDateInToday(date)
                 days.append(CalendarDate(date: date, isToday: isToday))
             }
         }
-        
-        //初週のオフセット
-        if let firstDay = days.first, let firstDate = firstDay.date,
-           let firstDateWeekday = Calendar.current.weekday(for: firstDate) {
-            let firstWeekEmptyDays = firstDateWeekday - 1
-            for _ in 0..<firstWeekEmptyDays {
-                days.insert(CalendarDate(date: nil, isToday: false),at: 0)
-            }
-        }
-        
-        //最終週のオフセット
-        if let lastDay = days.last, let lastDate = lastDay.date,
-           let lastDateWeekday = Calendar.current.weekday(for: lastDate) {
-            let lastWeekdayEmptyDays = 7 - lastDateWeekday
-            for _ in 0..<lastWeekdayEmptyDays {
-                days.append(CalendarDate(date:nil ,isToday: false))
-            }
-        }
-        
-        //カレンダーの日付を更新
         calendarDates = days
     }
+
+
+        func changeMonth(by offset: Int) {
+            if let newMonth = Calendar.current.date(byAdding: .month, value: offset, to: selectedMonth) {
+                selectedMonth = newMonth
+                setupCalendar(for: newMonth)
+            }
+        }
+
     
     //祝日かどうかを判定する関数
     func isHoliday(date: Date) -> Bool {
         let calendar = Calendar.current
         let components = calendar.dateComponents([.year, .month, .day, .weekday], from: date)
-        guard let year = components.year, let month = components.month, let day = components.day,
+        guard let year = components.year, let month = components.month,
+              let day = components.day,
               let weekday = components.weekday else{
             return false
         }
@@ -321,91 +288,47 @@ class CalendarViewModel: ObservableObject {
 
 //親ビュー
 struct ContentView: View {
-    @ObservedObject var viewModel = CalendarViewModel(selectedDateUUID: UUID())
-    @State private var selectedDateUUID: IdentifiableUUID? = nil
-        
-    var body: some View{
-        CalendarView(viewModel: viewModel, selectedDateUUID: $selectedDateUUID)
-            .onAppear{
-                    selectedDateUUID = IdentifiableUUID(id: UUID())
-            }
+    var body: some View {
+        CalendarView(viewModel: CalendarViewModel())
     }
 }
-
 // カレンダービュー
 struct CalendarView: View {
-    @StateObject var viewModel: CalendarViewModel
-    @Binding var selectedDateUUID: IdentifiableUUID? // 選択された日付の IdentifiableUUID を追跡するための Binding
-    @State private var isSheetPresented = false // シートの表示状態を追跡するプロパティを追加
-    
-    let columns: [GridItem] = Array(repeating: .init(.fixed(40)), count: 7)
-    @State private var selectedDate:Date?
-    
+    @ObservedObject var viewModel: CalendarViewModel
 
     var body: some View {
-        VStack{
-            // 西暦と月の表示
-            Text(formattedDate)
-                .font(.title)
-            
-            // 曜日
+        VStack {
             HStack {
-                ForEach(viewModel.weekdays, id: \.self) { weekday in
-                    Text(weekday).frame(width: 40, height: 40, alignment: .center)
+                Button("前の月") {
+                    viewModel.changeMonth(by: -1)
                 }
-            }
-            
-            //カレンダー
-            LazyVGrid(columns: columns, spacing: 20) {
-                ForEach(viewModel.calendarDates) { calendarDate in
-                    if let date = calendarDate.date, let day = Calendar.current.day(for: date){
-                        let isHoliday = viewModel.isHoliday(date: date)//祝日かどうかを確認
-                        Button(action: {
-                            guard let date = calendarDate.date else { return }
-                            selectedDateUUID = IdentifiableUUID(id: calendarDate.id) // 選択された日付のUUIDを更新
-                            selectedDate = date //選択された日付を更新
-                            isSheetPresented = true // シートを表示
-                        }){
-                            Text("\(day)").frame(width: 40, height: 40, alignment: .center)
-                        }
-                    .foregroundColor(isHoliday ? .red : calendarDate.isToday ? .blue : .black) // 今日の日付は青く、祝日は赤く表示
-                        .padding(5)
-                        .background(selectedDate == calendarDate.date ? Color.yellow : Color.clear)
-                        .cornerRadius(5)
-                    }else {
-                        Text("").frame(width: 40, height: 40, alignment: .center)
-                    }
+                Spacer()
+                Text(viewModel.selectedMonth, formatter: dateFormatter)
+                Spacer()
+                Button("次の月") {
+                    viewModel.changeMonth(by: 1)
                 }
             }
             .padding()
-        }
-        .sheet(isPresented: $isSheetPresented) {// シートを表示する
-            VStack {
-                if let selectedDate = viewModel.calendarDates.first(where: { $0.id == selectedDateUUID?.id })?.date {
-                   if let holidayName = viewModel.isHolidayName(date: selectedDate) {
-                       Text("選択された日付: \(holidayName)")
-                   } else {
-                      // 祝日名が見つからない場合の処理
-                      Text("祝日名が見つかりません")
-                    }
-                } else {
-                    //日付が見つからない場合の処理
-                    Text("日付が見つかりません")
-                }
-                
-                Button(action: {
-                    isSheetPresented = false // シートを閉じる
-                }) {
-                    Text("閉じる")
+
+            ForEach(viewModel.calendarDates, id: \.id) { date in
+                if let unwrappedDate = date.date {
+                    Text("\(unwrappedDate, formatter: dayFormatter)")
+                        .foregroundColor(date.isToday ? .red : .black)
                 }
             }
         }
-        // フォーマットされた日付
-        var formattedDate: String {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy/MM"
-            return dateFormatter.string(from: viewModel.selectedMonth)
-        }
+    }
+
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy MMMM"
+        return formatter
+    }
+
+    private var dayFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d"
+        return formatter
     }
 }
-
